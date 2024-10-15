@@ -43,3 +43,20 @@ typoguardian {패키지 이름} --clean
 - yara 악성코드 탐지 결과 (output => yara_scan_results.json)
 - sboom 취약점 탐지 결과 (output => sbom_results.json)
 - gaurddog 악성코드 탐지결과 (output => dog_result.json)
+
+### 성과
+Typoguardian은 PyPI에서 실제로 타이포스쿼팅 악성 패키지를 발견하여 리폿할 수 있었습니다. 다음은 발견 사항 중 몇 가지 하이라이트입니다.
+
+## 탐지된 타이포스쿼팅 악성 패키지
+
+| 타이포스쿼팅 패키지 | 정상 패키지     | 특징 |
+|--------------------|----------------|---------------------|
+| **fake-usragent**   | fake_useragent | chorome.jpg 스테가노그래피를 이용하여 외부 서버에 암호화된 데이터를 전송. 서버로부터 받은 데이터를 복호화해 악성 코드를 실행 |
+| **pdf2doc**         | pdf2docx       | 사용자의 시스템 정보(호스트 이름, 로그인 계정)를 수집하여 외부 서버로 전송 |
+| **setuptolos**      | setuptools     | 특정 사용자 디렉토리에서 `.profile` 파일을 조작하여, 암호화폐 채굴 스크립트를 다운로드 및 실행하여 Monero 채굴 수행 |
+| **bo3to**           | boto3          | `/etc/passwd` 파일을 분석하여 사용자의 계정을 탐지한 후, 특정 사용자의 `.profile` 파일에 악성 스크립트를 삽입하여 Monero 채굴 |
+| **botoceor**        | botocore       | 시스템 설정 파일을 읽어 사용자 정보를 수집하고, 사용자의 홈 디렉토리에 악성 스크립트를 삽입해 암호화폐 채굴 |
+| **colotama**        | colorama       | 종속성 패키지를 통해 Discord 웹훅을 통해 사용자의 홈 디렉토리 경로와 기타 정보를 외부로 유출 |
+| **cryptograohy**    | cryptography   | 종속성 패키지를 통해 Discord 웹훅으로 사용자의 시스템 정보를 전송 |
+| **discould**        | discord        | 악성 PowerShell 스크립트를 통해 원격에서 악성 파일을 다운로드하고 실행 |
+| **fake-usreagent**  | fake-useragent | chorome.jpg 스테가노그래피를 이용하여 외부 서버에 암호화된 데이터를 전송. 서버로부터 받은 데이터를 복호화해 악성 코드를 실행 |
