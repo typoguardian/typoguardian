@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import requests
 import zipfile
 import re
@@ -9,16 +10,19 @@ from tqdm import tqdm
 current_script_path = os.path.abspath(__file__)
 BASE_DIR = os.path.dirname(os.path.dirname(current_script_path))
 
-SAVE_DIR =  os.path.join(BASE_DIR, 'similar_packages')
+SAVE_DIR = os.path.join(BASE_DIR, 'similar_packages')
+POP_SAVE_DIR = os.path.join(BASE_DIR, 'pop_save')
 SIMILAR_JSON_FILE = os.path.join(BASE_DIR, 'final_typos.json')
 ZIP_PATH = os.path.join(BASE_DIR, 'packages.zip')
 PYPI_ZIP_DIR = os.path.join(BASE_DIR, 'pypi_zip')
+
 
 def get_github_url(package_info):
     project_urls = package_info["info"]["project_urls"]
     if project_urls:
         return next((url for url in project_urls.values() if "github.com" in url), None)
     return None
+
 
 def get_github_release_url(github_url):
     match = re.search(r'github\.com/([^/]+)/([^/]+)', github_url)
@@ -27,7 +31,7 @@ def get_github_release_url(github_url):
     owner, repo = match.groups()
     releases_url = f"https://api.github.com/repos/{owner}/{repo}/releases/latest"
     headers = {
-	    #'Authorization' : 'git token'
+        # 'Authorization' : 'git token',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     }
     try:
@@ -38,6 +42,7 @@ def get_github_release_url(github_url):
         return f"https://github.com/{owner}/{repo}/archive/refs/tags/{tag_name}.tar.gz"
     except requests.exceptions.RequestException:
         return None
+
 
 def download_package(package_name, version, save_path):
     url = f"https://pypi.org/pypi/{package_name}/{version}/json"
@@ -65,6 +70,7 @@ def download_package(package_name, version, save_path):
     except requests.exceptions.RequestException:
         return False
 
+
 def compress_to_zip(base_save_path, zip_path):
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for root, dirs, files in os.walk(base_save_path):
@@ -72,6 +78,7 @@ def compress_to_zip(base_save_path, zip_path):
                 file_path = os.path.join(root, file)
                 arcname = os.path.relpath(file_path, base_save_path)
                 zipf.write(file_path, arcname)
+
 
 def get_package_version(package_name):
     try:
@@ -83,11 +90,13 @@ def get_package_version(package_name):
     except requests.exceptions.RequestException:
         return None
 
+
 def process_package(package_name, base_save_path):
     version = get_package_version(package_name)
     if version:
         save_path = os.path.join(base_save_path, package_name, version, f"{package_name}-{version}.tar.gz")
         download_package(package_name, version, save_path)
+
 
 def restructure_dir(package_name, package_type='normal'):
     package_dir = os.path.join(PYPI_ZIP_DIR, package_name)
@@ -111,25 +120,61 @@ def restructure_dir(package_name, package_type='normal'):
             for item in os.listdir(source_path):
                 s = os.path.join(source_path, item)
                 d = os.path.join(target_path, item)
-                shutil.move(s, d)
+                if os.path.isdir(s):
+                    shutil.copytree(s, d, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(s, d)
 
             if not os.listdir(source_path):
                 os.rmdir(source_path)
+
 
 def load_similar_packages(json_file):
     with open(json_file, 'r', encoding='utf-8') as file:
         return json.load(file)
 
+
 def run_typos_result_download():
+    downloaded_packages = set()
+    packages_to_download = set()
     with open(SIMILAR_JSON_FILE, 'r') as file:
         data = json.load(file)
 
-    for norm_pkg_name in tqdm(data.keys(), desc="Download packages file"):
-        process_package(norm_pkg_name, PYPI_ZIP_DIR)
-        for package_info in data[norm_pkg_name]:
+    for norm_pkg_name, package_list in data.items():
+        norm_pkg_to_download = False
+        for package_info in package_list:
             package_name, score = package_info
             if score >= 3.0:
-                process_package(package_name, PYPI_ZIP_DIR)
+                packages_to_download.add(package_name)
+                norm_pkg_to_download = True
+        if norm_pkg_to_download:
+            packages_to_download.add(norm_pkg_name)
+
+    if not packages_to_download:
+        print("타이포스쿼팅 의심패키지 없음.")
+        sys.exit()
+
+    with tqdm(total=len(packages_to_download), desc="Download packages file") as pbar:
+        for package_name in packages_to_download:
+            if package_name in downloaded_packages:
+                pbar.update(1)
+                continue
+
+            if package_name in data.keys():
+                version = get_package_version(package_name)
+                if version:
+                    pop_save_path = os.path.join(POP_SAVE_DIR, package_name, version, f"{package_name}-{version}.tar.gz")
+                    if not os.path.exists(pop_save_path):
+                        process_package(package_name, POP_SAVE_DIR)
+                    else:
+                        print(f"{package_name}-{version} is already in pop_save, skipping download.")
+                    downloaded_packages.add(package_name)
+                    continue
+
+            process_package(package_name, PYPI_ZIP_DIR)
+            downloaded_packages.add(package_name)
+            pbar.update(1)
+
     compress_to_zip(PYPI_ZIP_DIR, ZIP_PATH)
 
     similar_packages = load_similar_packages(SIMILAR_JSON_FILE)
@@ -140,8 +185,6 @@ def run_typos_result_download():
             if score >= 3.0:
                 restructure_dir(mal_pkg_name, package_type=norm_pkg_name)
 
+
 if __name__ == '__main__':
     run_typos_result_download()
-
-
-

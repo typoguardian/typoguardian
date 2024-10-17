@@ -1,5 +1,3 @@
-#https://github.com/MaxHalford/clavier
-#pip install git+https://github.com/MaxHalford/clavier
 import json
 import os
 from clavier import load_qwerty
@@ -9,9 +7,17 @@ BASE_DIR = os.path.dirname(os.path.dirname(current_script_path))
 output_file = os.path.join(BASE_DIR, 'typos_clavier.json')
 input_file = os.path.join(BASE_DIR, 'typos_DLD.json')
 
+
 def run_clavier():
-    with open(input_file, 'r') as file:
-        data = json.load(file)
+    try:
+        with open(input_file, 'r') as file:
+            data = json.load(file)
+    except FileNotFoundError:
+        return
+    except json.JSONDecodeError:
+        return
+    except Exception:
+        return
 
     keyboard = load_qwerty()
 
@@ -22,15 +28,19 @@ def run_clavier():
 
     for pkg, typos_list in data.items():
         processed_typos = []
-        for typos, original_score in typos_list:
+        for typos, original_score, swapped in typos_list:
             if len(pkg) == len(typos):
-                keyboard_score = calculate_keyboard_distance(pkg, typos)
-                processed_typos.append([typos, keyboard_score])
+                try:
+                    keyboard_score = calculate_keyboard_distance(pkg, typos)
+                    processed_typos.append([typos, keyboard_score])
+                except Exception:
+                    continue
         processed_typos.sort(key=lambda x: (x[1] is not None, x[1]))
 
         data[pkg] = processed_typos
 
-    with open(output_file, 'w') as file:
-        json.dump(data, file, indent=4)
-
-
+    try:
+        with open(output_file, 'w') as file:
+            json.dump(data, file, indent=4)
+    except Exception:
+        pass

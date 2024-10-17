@@ -5,6 +5,7 @@ import zipfile
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
+import re
 
 current_script_path = os.path.abspath(__file__)
 BASE_DIR = os.path.dirname(os.path.dirname(current_script_path))
@@ -13,9 +14,8 @@ output_file = os.path.join(BASE_DIR, 'sbom_results.json')
 extract_path = os.path.join(BASE_DIR, 'packages')
 bomber_path = '/usr/local/bin/bomber'
 
-def run_sbom_analysis():
 
-    
+def run_sbom_analysis():
     if not zipfile.is_zipfile(input_file):
         raise ValueError("업로드된 파일이 zip 형식이 아닙니다.")
 
@@ -30,14 +30,28 @@ def run_sbom_analysis():
     results = []
     total_start_time = time.time()
 
-    def retry_command(command, retries=3, delay=2):
+    def retry_command(command, output_file, retries=3, delay=2):
         for i in range(retries):
             try:
-                result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
-                return result
+                subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+                if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
+                    return True
             except subprocess.CalledProcessError:
                 time.sleep(delay)
-        raise
+        return False
+
+    def clean_json_file(file_path):
+        cleaned_lines = []
+        inside_json = False
+        with open(file_path, 'r') as f:
+            for line in f:
+                if line.strip().startswith("{"):
+                    inside_json = True
+                if inside_json:
+                    cleaned_lines.append(line)
+
+        with open(file_path, 'w') as f:
+            f.writelines(cleaned_lines)
 
     def analyze_file(file_path):
         result = {}
@@ -45,36 +59,14 @@ def run_sbom_analysis():
             start_time = time.time()
             syft_output_file = file_path + "-sbom.json"
             syft_command = f"syft {file_path} -o cyclonedx-json > {syft_output_file}"
-            with open(os.devnull, 'w') as devnull:
-                subprocess.run(syft_command, shell=True, stdout=devnull, stderr=devnull, check=True)
+
+            if not retry_command(syft_command, syft_output_file):
+                raise Exception(f"syft 명령어 실패 또는 출력 파일 생성 실패: {syft_output_file}")
 
             with open(syft_output_file, 'r') as f:
+                if os.path.getsize(syft_output_file) == 0:
+                    raise Exception(f"SBOM 파일이 비어 있음: {syft_output_file}")
                 sbom_data = json.load(f)
-
-            if "tools" in sbom_data["metadata"]:
-                tools = sbom_data["metadata"]["tools"]
-                if isinstance(tools, list):
-                    new_tools = []
-                    for tool in tools:
-                        if "components" in tool:
-                            for component in tool["components"]:
-                                new_tools.append({
-                                    "vendor": component.get("author", ""),
-                                    "name": component.get("name", ""),
-                                    "version": component.get("version", "")
-                                })
-                        else:
-                            new_tools.append(tool)
-                    sbom_data["metadata"]["tools"] = new_tools
-                elif isinstance(tools, dict) and "components" in tools:
-                    new_tools = []
-                    for component in tools["components"]:
-                        new_tools.append({
-                            "vendor": component.get("author", ""),
-                            "name": component.get("name", ""),
-                            "version": component.get("version", "")
-                        })
-                    sbom_data["metadata"]["tools"] = new_tools
 
             formatted_sbom_file = file_path + "-sbom-formatted.json"
             with open(formatted_sbom_file, "w") as f:
@@ -83,41 +75,41 @@ def run_sbom_analysis():
             result["파일명"] = os.path.basename(file_path)
             result["SBOM 정보"] = sbom_data
 
-            try:
-                bomber_output_file = file_path + "-bomber-output.json"
-                scan_command = f"{bomber_path} scan --output=json {formatted_sbom_file} > {bomber_output_file}"
-                # Suppress output by redirecting to /dev/null
-                with open(os.devnull, 'w') as devnull:
-                    subprocess.run(scan_command, shell=True, stdout=devnull, stderr=devnull, check=True)
+            bomber_output_file = file_path + "-bomber-output.json"
+            scan_command = f"{bomber_path} scan --output=json {formatted_sbom_file} > {bomber_output_file}"
 
-                with open(bomber_output_file, 'r') as f:
-                    bomber_result = json.load(f)
+            if not retry_command(scan_command, bomber_output_file):
+                raise Exception(f"bomber 명령어 실패 또는 출력 파일 생성 실패: {bomber_output_file}")
 
-                if "packages" in bomber_result:
-                    vulnerabilities = []
-                    for pkg in bomber_result["packages"]:
-                        if "vulnerabilities" in pkg and pkg["vulnerabilities"]:
-                            vulnerabilities.extend(pkg["vulnerabilities"])
+            clean_json_file(bomber_output_file)
 
-                    if vulnerabilities:
-                        result["악성 패키지 여부"] = "악성"
-                        result["악성 이유"] = vulnerabilities
-                        return result, True
-                    else:
-                        result["악성 패키지 여부"] = "정상"
+            with open(bomber_output_file, 'r') as f:
+                if os.path.getsize(bomber_output_file) == 0:
+                    raise Exception(f"Bomber 출력 파일이 비어 있음: {bomber_output_file}")
+                bomber_result = json.load(f)
+
+            if "packages" in bomber_result:
+                vulnerabilities = []
+                for pkg in bomber_result["packages"]:
+                    if "vulnerabilities" in pkg and pkg["vulnerabilities"]:
+                        vulnerabilities.extend(pkg["vulnerabilities"])
+
+                if vulnerabilities:
+                    result["악성 패키지 여부"] = "악성"
+                    result["악성 이유"] = vulnerabilities
+                    return result, True
                 else:
                     result["악성 패키지 여부"] = "정상"
-                return result, False
-
-            except Exception as e:
-                return None, str(e)
+            else:
+                result["악성 패키지 여부"] = "정상"
+            return result, False
 
         except Exception as e:
             return None, str(e)
 
     with ThreadPoolExecutor() as executor:
         futures = {executor.submit(analyze_file, os.path.join(root, file)): file for root, dirs, files in os.walk(package_path) for file in files if file.endswith(".tar.gz")}
-        
+
         for future in tqdm(as_completed(futures), total=len(futures), desc="Analyzing SBOM"):
             file = futures[future]
             try:
@@ -145,13 +137,10 @@ def run_sbom_analysis():
     }
 
     output_json = json.dumps(output, ensure_ascii=False, indent=4)
-    
+
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(output_json)
-    #print("Saved sbom_results.json")
+
 
 if __name__ == '__main__':
     run_sbom_analysis()
-
-
-

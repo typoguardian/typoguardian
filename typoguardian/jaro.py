@@ -7,11 +7,12 @@ BASE_DIR = os.path.dirname(os.path.dirname(current_script_path))
 input_file = os.path.join(BASE_DIR, 'typos_DLD.json')
 output_file = os.path.join(BASE_DIR, 'typos_jaro.json')
 
+
 def calculate_jaro_winkler_similarity(results):
     jaro_results = {}
     for package, similar_packages in results.items():
         jaro_scores = []
-        for similar_package, dld_score in similar_packages:
+        for similar_package, dld_score, swapped in similar_packages:
             score = jarowinkler.jarowinkler_similarity(package, similar_package)
             jaro_scores.append((similar_package, score))
         jaro_scores.sort(key=lambda x: x[1], reverse=True)

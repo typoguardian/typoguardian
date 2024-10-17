@@ -10,11 +10,11 @@ yara_rule = os.path.join(BASE_DIR, 'yara_rules/yaramodel1.yara')
 input_file = os.path.join(BASE_DIR, 'packages.zip')
 output_file = os.path.join(BASE_DIR, 'yara_scan_results.json')
 
+
 def compile_yara_rule(rule_file):
     try:
         with open(rule_file, 'r', encoding='utf-8') as f:
             rule = yara.compile(source=f.read())
-        #print(f"Compiled rule from file: {rule_file}")
         return rule
     except yara.SyntaxError as e:
         print(f"Syntax error compiling {rule_file}: {e}")
@@ -26,7 +26,6 @@ def compile_yara_rule(rule_file):
 
 
 def extract_and_scan_zip(zip_path, rule):
-    #print(f"Extracting and scanning zip file: {zip_path}")
     results = {'malicious': [], 'clean': [], 'failed': []}
     try:
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -66,5 +65,3 @@ def run_yara_scan():
 
 if __name__ == "__main__":
     run_yara_scan()
-
-

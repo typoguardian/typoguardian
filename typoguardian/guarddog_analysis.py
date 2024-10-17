@@ -23,6 +23,7 @@ def analyze_package(package_path):
     except json.JSONDecodeError:
         return None
 
+
 def is_valid_tar_gz(file_path):
     if not os.path.isfile(file_path):
         return False
@@ -32,6 +33,7 @@ def is_valid_tar_gz(file_path):
     except IOError:
         return False
 
+
 def extract_package_info(filename):
     pattern = r'^(.*?)-(\d+(?:\.\d+)*(?:[a-z]+\d+)?(?:\.post\d+)?(?:\.dev\d+)?)\.tar\.gz$'
     match = re.match(pattern, filename)
@@ -39,15 +41,16 @@ def extract_package_info(filename):
         return match.group(1), match.group(2)
     return filename.replace('.tar.gz', ''), ''
 
+
 def process_package(package_file):
     if not is_valid_tar_gz(package_file):
         return None, False
-    
+
     analysis_result = analyze_package(package_file)
-    
+
     if analysis_result is None:
         return None, False
-    
+
     filename = os.path.basename(package_file)
     package_name, version = extract_package_info(filename)
     is_malicious = analysis_result['issues'] > 0
@@ -55,7 +58,7 @@ def process_package(package_file):
         "package": filename,
         "issues": []
     }
-    
+
     for issue_type, issues in analysis_result['results'].items():
         for issue in issues:
             package_info["issues"].append({
@@ -65,6 +68,7 @@ def process_package(package_file):
                 "message": issue.get("message", "")
             })
     return package_info, is_malicious
+
 
 def process_zip_file(zip_file_path, output_json):
     all_packages = []
@@ -94,10 +98,10 @@ def process_zip_file(zip_file_path, output_json):
     with open(output_json, 'w') as f:
         json.dump(final_result, f, indent=2)
 
+
 def run_guarddog_analysis():
     process_zip_file(input_file, output_file)
 
+
 if __name__ == "__main__":
     run_guarddog_analysis()
-
-

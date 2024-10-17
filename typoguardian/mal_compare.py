@@ -7,6 +7,8 @@ current_script_path = os.path.abspath(__file__)
 BASE_DIR = os.path.dirname(os.path.dirname(current_script_path))
 input_file = os.path.join(BASE_DIR, 'similar_packages')
 output_file = os.path.join(BASE_DIR, 'comparison_results.json')
+POP_SAVE_DIR = os.path.join(BASE_DIR, 'pop_save')
+
 
 def get_file_list_from_tar(archive_path):
     try:
@@ -36,9 +38,14 @@ def compare_files(normal_files, malicious_tar_path):
 def run_mal_compare():
     base_dir = input_file
     results = {}
-
+    
+    if not os.path.exists(base_dir) or not os.listdir(base_dir):
+        with open(output_file, 'w', encoding='utf-8') as json_file:
+            json.dump(results, json_file, ensure_ascii=False, indent=4)
+        return
+        
     for normal_package_name in os.listdir(os.path.join(base_dir)):
-        normal_package_dir = os.path.join(base_dir, normal_package_name, 'normal')
+        normal_package_dir = os.path.join(POP_SAVE_DIR, normal_package_name)
         if os.path.isdir(normal_package_dir):
             for normal_version in os.listdir(normal_package_dir):
                 normal_version_dir = os.path.join(normal_package_dir, normal_version)
@@ -66,7 +73,7 @@ def run_mal_compare():
                                                     common_files_count = compare_files(normal_filenames, malicious_tar_path)
                                                     rate = common_files_count / normal_file_count
 
-                                                    if rate > 0.4 and common_files_count >= 10:
+                                                    if rate > 0.4 and common_files_count >= 12:
                                                         if normal_package_name not in results:
                                                             results[normal_package_name] = {"file_count": normal_file_count, "versions": {}}
                                                         if normal_version not in results[normal_package_name]["versions"]:
@@ -89,7 +96,6 @@ def run_mal_compare():
     with open(output_file, 'w', encoding='utf-8') as json_file:
         json.dump(results, json_file, ensure_ascii=False, indent=4)
 
+
 if __name__ == "__main__":
     run_mal_compare()
-
-
