@@ -1,6 +1,6 @@
 # 🛡️ Typoguardian
 
-![GitHub stars](https://img.shields.io/github/stars/Hyunddu/typoguardian?style=social)
+![GitHub stars](https://img.shields.io/github/stars/typoguardian/typoguardian?style=social)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 
 > Typoguardian은 다양한 알고리즘을 활용하여 타이포스쿼팅 의심 패키지를 식별하는 강력한 Python 모듈입니다.
